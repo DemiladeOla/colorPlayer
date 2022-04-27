@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<style>
+  body {
+    margin: 0;
+    overflow:hidden;
+    height: 100vh;
+    accent-color: black;
+  }
+  @supports (-webkit-touch-callout: none) {
+    body {
+      max-height: -webkit-fill-available;
+    }
+  }
+  #app,
+  #info {
+    width: 100vw;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    font-family: "Helvetica",sans-serif;
+  }
+  #info {
+    position: fixed;
+    top: 0;
+    left: 0;
+    background-color: #000;
+  }
+  .frame {
+    text-align: center;
+    background-color: #fff;
+    padding: 24px;
+    border-radius: 12px;
+  }
+  ul {
+    margin: 0;
+    padding: 0;
+    margin: 24px;
+  }
+  li {
+    list-style: none;
+  }
+</style>
+<body>
+  <div id="app"></div>
+  <div id="info">
+    <div class="frame">
+      <ul>
+        <li>Remove your device from silent</li>
+        <li>Increase your volume</li>
+      </ul>
+      <button>Begin</button>
+    </div>
+  </div>
+  <script src="https://unpkg.com/tone@14.7.58/build/Tone.js"></script>
+  <script>
+    const app = document.querySelector('#app');
+    const info = document.querySelector('#info');
+    let VIDEO = document.createElement('video');
+    VIDEO.setAttribute('playsinline', '');
+    VIDEO.setAttribute('muted', '');
+    VIDEO.setAttribute('autoplay', '');
+
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    c.width = 1;
+    c.height = 1;
+
+    const map = (value, x1, y1, x2, y2) => (value - x1) * (y2 - x2) / (y1 - x1) + x2;
+
+    let synth, loop;
+    const createLoop = () => {
+      synth = new Tone.Synth();
+      loop = new Tone.Loop(time => {
+        synth.toDestination();
+        synth.triggerAttackRelease(220, '8n', time)
+      }, '1n');
+    }
+
+    const getCam = () => {
+      // var constraints = { video: true };
+      var constraints = { video: { facingMode: { exact: "environment" } } };
+      navigator.mediaDevices.getUserMedia(constraints)
+      .then(function(mediaStream) {
+        VIDEO.srcObject = mediaStream;
+        VIDEO.onloadedmetadata = function(e) {
+          VIDEO.play();
+          update();
+          ctx.getImageData(0, 0, 1, 1);
+        };
+      })
+      .catch(function(err) { console.log(err.name + ": " + err.message); });
+    }
+
+    info.addEventListener('click', () => {
+      createLoop();
+      getCam();
+      VIDEO.play();
+      info.style.display = 'none';
+    }, { once: true });
+
+    const options = {
+      threshold: 60,
+      lastTotal: 0,
+      total: 0,
+      cX: 0,
+      cY: 0,
+      w: window.innerWidth,
+      h: window.innerHeight
+    }
+
+    const update = () => {
+      ctx.drawImage(VIDEO, 0, 0, 1, 1);
+      const data = ctx.getImageData(0, 0, 1, 1).data;
+      const color = `rgb(${data[0]}, ${data[1]}, ${data[2]})`;
+      options.total = data[0] + data[1] + data[2];
+      const diff = Math.abs(options.total - options.lastTotal);
+      synth.frequency.value = Math.round(map(options.total, 0, 765, 110, 880));
+      // osc2.frequency.value = Math.round(map(options.total, 0, 765, 110, 880));
+      options.lastTotal = options.total;
+      if (diff > options.threshold) {
+        app.style.backgroundColor = color;
+      };
+      requestAnimationFrame(update);
+    }
+    const setIntervals = (e) => {
+      options.cX = e.touches[0].clientX;
+      options.cY = e.touches[0].clientY;
+      const loopInterval = Math.round(map(options.cY, 0, options.h, 6, 1,));
+      loop.interval = `${loopInterval}n`;
+    }
+    app.addEventListener('touchstart', (e) => {
+      setIntervals(e)
+      Tone.Transport.start();
+      loop.start();
+    })
+    app.addEventListener('touchmove', (e) => {
+      setIntervals(e)
+    })
+    app.addEventListener('touchend', () => {
+      loop.stop();
+    })
+  </script>
+</body>
+</html>
